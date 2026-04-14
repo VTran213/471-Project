@@ -4,6 +4,7 @@ Names and email addresses of partners:
 - Miguel Romero-Mojica Miguelromerojr10@csu.fullerton.edu
 - Alan Hoang alanhoang@csu.fullerton.edu
 - Arai Leyva araileyva@csu.fullerton.edu
+- Eric Ayala eyala@csu.fullerton.edu
 
 Programming language:
 - Python
