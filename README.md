@@ -3,7 +3,13 @@ Names and email addresses of partners:
 - Add your group members here.
 
 Programming language:
-- Python 3
+- Python
+
+Files included:
+- serv.py
+- cli.py
+- README.txt
+- protocol_design.txt
 
 How to execute:
 1. Start the server:
@@ -28,7 +34,7 @@ Protocol design summary:
 - The client sends a control message to the server containing the command and the ephemeral data port.
 - The server connects back to the client on that ephemeral port to create a temporary TCP data connection.
 - Data sent on the data connection is framed as:
-    [10-byte ASCII size header][payload bytes]
+  [10-byte ASCII size header][payload bytes]
 - The control channel is used for commands and status messages only.
 - The data channel is created and torn down once per transfer.
 
