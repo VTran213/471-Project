@@ -1,6 +1,8 @@
 # 471-Project
 Names and email addresses of partners:
-- Add your group members here.
+- Van Tran vt2002@csu.fullerton.edu
+- Miguel Romero-Mojica Miguelromerojr10@csu.fullerton.edu
+- Alan Hoang alanhoang@csu.fullerton.edu
 
 Programming language:
 - Python
