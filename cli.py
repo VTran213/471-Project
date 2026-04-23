@@ -177,40 +177,69 @@ def recv_file_over_socket(data_sock, save_path: str) -> int:
 def do_ls(ctrl_sock):
     """List files in the server's working directory."""
 
-    # Step 1: open a free port for the incoming data connection
-    listen_sock, eph_port = get_ephemeral_port()
+    listen_sock, eph_port = get_ephemeral_port()     # Step 1: open a free port for the incoming data connection
 
-    # Step 2: tell the server we want a directory listing
-    send_msg(ctrl_sock, b"ls")
 
-    # Step 3: tell the server which port to connect to for the data channel
-    send_msg(ctrl_sock, str(eph_port).encode())
+    send_msg(ctrl_sock, b"ls")     # Step 2: tell the server we want a directory listing
 
-    # TODO Step 4: receive the server's acknowledgement with recv_msg()
-    #   - decode it to a string
-    #   - if it does NOT start with "SUCCESS", close listen_sock,
-    #     print the error, and return
 
-    # TODO Step 5: accept the server's data connection
-    #   - set a timeout on listen_sock (e.g. 10 seconds)
-    #   - call listen_sock.accept() inside a try/except socket.timeout
-    #   - close listen_sock in the finally block
+    
+    send_msg(ctrl_sock, str(eph_port).encode()) # Step 3: tell the server which port to connect to for the data channel
 
-    # TODO Step 6: receive the directory listing
-    #   - recv_exact(data_sock, HEADER_SIZE) → parse integer length
-    #   - recv_exact(data_sock, length)      → listing bytes
-    #   - close data_sock
+    ack = recv_msg(ctrl_sock)
+    
+    if(str(ack)!= "SUCCESS"):
+        listen_sock.close()
+        raise RuntimeError(ack)
 
-    # TODO Step 7: print the decoded listing string
+    listen_sock.settimeout(10)
 
-    # TODO Step 8: recv_msg(ctrl_sock) for the server's final status
-    #   - print it
-    pass
+    try:
+       data_socket,address = listen_sock.accept()
+    except ValueError as e:
+        print("Type of error: ",type(e))
+        print("Message: ",e)
+    finally:
+        listen_sock.close()
+    recv_exact(data_socket,HEADER_SIZE)
+    file_names = recv_exact(data_socket,len(data_socket))
+    data_socket.close()
+
+    print(file_names)
+
+    print(recv_msg(ctrl_sock))
+
+    
 
 
 def do_get(ctrl_sock, filename: str):
     """Download <filename> from the server to the local machine."""
+    listen_sock, eph_port = get_ephemeral_port()     # Step 1: open a free port for the incoming data connection
+    send_msg(ctrl_sock, b"get <filename>")     # Step 2: tell the server we want a directory listing
+    send_msg(ctrl_sock, str(eph_port).encode()) # Step 3: tell the server which port to connect to for the data channel
 
+    ack = recv_msg(ctrl_sock)
+    
+    if(str(ack)!= "SUCCESS"):
+        listen_sock.close()
+        raise RuntimeError(ack)
+    
+    listen_sock.settimeout(10)
+
+    try:
+       data_sock,address = listen_sock.accept()
+    except ValueError as e:
+        print("Type of error: ",type(e))
+        print("Message: ",e)
+    finally:
+        listen_sock.close()
+
+    bytes = recv_file_over_socket(data_sock, filename) 
+    listing_bytes = recv_exact(data_sock,len(data_sock))
+    data_sock.close()
+
+    print(listing_bytes)
+    print(f"{filename} received, {bytes} bytes transferred")
     # TODO: follow the same 8-step pattern as do_ls above.
     #
     # Key differences from ls:
@@ -218,7 +247,7 @@ def do_get(ctrl_sock, filename: str):
     #   - Step 6: use recv_file_over_socket(data_sock, filename)
     #             to write the file to disk
     #   - Step 8: also print  "<filename> received, N bytes transferred"
-    pass
+
 
 
 def do_put(ctrl_sock, filename: str):
@@ -233,7 +262,44 @@ def do_put(ctrl_sock, filename: str):
     #   - Step 6: use send_file_over_socket(data_sock, filename)
     #             to send the file
     #   - Step 8: also print  "<filename> sent, N bytes transferred"
+    if(os.path.isfile(filename) == False):
+        raise RuntimeError()
+    try:
+        os.path.isfile(filename) == False
+    except ValueError as e:
+        print("Type of error: ",type(e))
+        print("Message: ",e)
+
+    send_msg(ctrl_sock,b"put <filename>")
+
+
+    
+    listen_sock, eph_port = get_ephemeral_port()     # Step 1: open a free port for the incoming data connection
+    send_msg(ctrl_sock, str(eph_port).encode()) # Step 3: tell the server which port to connect to for the data channel
+
+    ack = recv_msg(ctrl_sock)
+    
+    if(str(ack)!= "SUCCESS"):
+        listen_sock.close()
+        raise RuntimeError(ack)
+    
+    listen_sock.settimeout(10)
+
+    try:
+       data_sock,address = listen_sock.accept()
+    except listen_sock.timeout():
+        print("timeout")
+    finally:
+        listen_sock.close()
     pass
+    send_file_over_socket(data_sock,filename)
+
+    bytes = recv_file_over_socket(data_sock, filename) 
+    listing_bytes = recv_exact(data_sock,len(data_sock))
+    data_sock.close()
+
+    print(listing_bytes)
+    print(f"{filename} received, {bytes} bytes transferred")
 
 
 def main():
