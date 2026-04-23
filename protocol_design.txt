@@ -1,1 +1,51 @@
+PROTOCOL DESIGN: Simplified FTP Project
 
+OVERVIEW:
+This program uses two TCP connections: a control channel for commands and responses and a data channel for file and directory transfers. All messages use a 10 byte header followed by the data.
+
+COMMANDS (Client to Server):
+
+ls
+get <filename>
+put <filename>
+quit
+
+After each command, the client sends a second message containing the data port number.
+
+RESPONSES (Server to Client):
+
+SUCCESS <message>
+FAILURE <message>
+
+DATA CHANNEL:
+
+- Client opens an ephemeral port and sends it to the server
+- Server connects to that port
+- Data is transferred
+- Connection is closed after transfer
+
+COMMAND FLOW:
+
+LS:
+Client sends "ls" and port
+Server sends SUCCESS
+Server connects and sends directory listing
+Server sends final SUCCESS
+
+GET:
+Client sends "get <filename>" and port
+Server sends SUCCESS or FAILURE
+If SUCCESS:
+Server connects and sends file
+Server sends final SUCCESS
+
+PUT:
+Client sends "put <filename>" and port
+Server sends SUCCESS
+Server connects
+Client sends file
+Server sends final SUCCESS
+
+QUIT:
+Client sends "quit"
+Server closes connection
