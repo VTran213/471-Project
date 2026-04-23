@@ -72,39 +72,76 @@ def handle_ls(ctrl_sock, client_ip: str, data_port: int):
             pass
 
 
-# =========================
-# TODO: COMPLETE BELOW
-# =========================
-
 def handle_get(ctrl_sock, client_ip: str, data_port: int, filename: str):
-    # TODO:
-    # 1. check if file exists (os.path.isfile)
-    # 2. send SUCCESS or FAILURE
-    # 3. connect to data socket
-    # 4. send file using chunks
-    # 5. close socket
-    # 6. send final SUCCESS with byte count
-    pass
+    """Send a file from server to client over the data channel."""
+    if not os.path.isfile(filename):
+        send_msg(ctrl_sock, f"FAILURE file not found: {filename}".encode())
+        return
 
+    try:
+        send_msg(ctrl_sock, b"SUCCESS ready for get")
 
+        data_sock = connect_data_socket(client_ip, data_port)
+        try:
+            file_bytes = b""
+            with open(filename, "rb") as f:
+                while True:
+                    chunk = f.read(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    file_bytes += chunk
+
+            byte_count = len(file_bytes)
+            send_msg(data_sock, file_bytes)
+
+        finally:
+            data_sock.close()
+
+        send_msg(ctrl_sock, f"SUCCESS get complete: {filename} {byte_count} bytes".encode())
+        print(f"GET: sent {filename} ({byte_count} bytes)")
+
+    except Exception as e:
+        try:
+            send_msg(ctrl_sock, f"FAILURE get failed: {e}".encode())
+        except:
+            pass
+ 
+ 
 def handle_put(ctrl_sock, client_ip: str, data_port: int, filename: str):
-    # TODO:
-    # 1. send SUCCESS ready
-    # 2. connect to data socket
-    # 3. receive file (read header, then chunks)
-    # 4. save file
-    # 5. close socket
-    # 6. send final SUCCESS with byte count
-    pass
+    """Receive a file from client and save it on the server."""
+    try:
+        send_msg(ctrl_sock, b"SUCCESS ready for put")
 
+        data_sock = connect_data_socket(client_ip, data_port)
+        try:
+            file_data = recv_msg(data_sock)
+        finally:
+            data_sock.close()
 
+        with open(filename, "wb") as f:
+            f.write(file_data)
+
+        byte_count = len(file_data)
+        send_msg(ctrl_sock, f"SUCCESS put complete: {filename} {byte_count} bytes".encode())
+        print(f"PUT: received {filename} ({byte_count} bytes)")
+
+    except Exception as e:
+        try:
+            send_msg(ctrl_sock, f"FAILURE put failed: {e}".encode())
+        except:
+            pass
+ 
+ 
 def handle_client(ctrl_sock, client_addr):
+    """Main loop for a single client session over the control channel."""
     client_ip = client_addr[0]
+    print(f"Session started with {client_ip}:{client_addr[1]}")
 
     while True:
         try:
             raw_command = recv_msg(ctrl_sock)
-        except:
+        except Exception:
+            print(f"Client {client_ip} disconnected unexpectedly")
             break
 
         command_line = raw_command.decode().strip()
@@ -117,42 +154,72 @@ def handle_client(ctrl_sock, client_addr):
 
         if cmd == "quit":
             send_msg(ctrl_sock, b"SUCCESS goodbye")
+            print(f"Client {client_ip} quit cleanly")
             break
 
-        # TODO:
-        # receive data port from client using recv_msg
-        # convert to int
-        # store as data_port
+        try:
+            data_port = int(recv_msg(ctrl_sock).decode().strip())
+        except Exception as e:
+            send_msg(ctrl_sock, f"FAILURE could not read data port: {e}".encode())
+            continue
 
         if cmd == "ls":
-            # TODO: call handle_ls(ctrl_sock, client_ip, data_port)
-            pass
+            handle_ls(ctrl_sock, client_ip, data_port)
 
         elif cmd == "get":
-            # TODO: check filename exists in parts
-            # then call handle_get(...)
-            pass
+            if len(parts) < 2 or not parts[1].strip():
+                send_msg(ctrl_sock, b"FAILURE get requires a filename")
+            else:
+                handle_get(ctrl_sock, client_ip, data_port, parts[1].strip())
 
         elif cmd == "put":
-            # TODO: check filename exists in parts
-            # then call handle_put(...)
-            pass
+            if len(parts) < 2 or not parts[1].strip():
+                send_msg(ctrl_sock, b"FAILURE put requires a filename")
+            else:
+                handle_put(ctrl_sock, client_ip, data_port, parts[1].strip())
 
         else:
             send_msg(ctrl_sock, f"FAILURE unknown command: {cmd}".encode())
-
-
+ 
+ 
 def main():
-    # TODO:
-    # 1. check sys.argv length
-    # 2. convert port to int
-    # 3. create socket
-    # 4. bind + listen
-    # 5. accept clients in loop
-    # 6. call handle_client
-    # 7. close sockets properly
-    pass
+    if len(sys.argv) != 2:
+        print(f"Usage: python {sys.argv[0]} <port>")
+        sys.exit(1)
 
+    try:
+        port = int(sys.argv[1])
+    except ValueError:
+        print("Error: port must be an integer")
+        sys.exit(1)
 
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # SO_REUSEADDR prevents "address already in use" when restarting server quickly
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_socket.bind(("", port))
+    server_socket.listen(5)
+    print(f"FTP server ready on port {port}")
+
+    try:
+        while True:
+            try:
+                ctrl_sock, client_addr = server_socket.accept()
+            except KeyboardInterrupt:
+                print("\nShutting down server...")
+                break
+
+            try:
+                handle_client(ctrl_sock, client_addr)
+            except Exception as e:
+                print(f"Unhandled error with client {client_addr}: {e}")
+            finally:
+                ctrl_sock.close()
+
+    finally:
+        server_socket.close()
+        print("Server closed.")
+ 
+ 
 if __name__ == "__main__":
     main()
+ 
