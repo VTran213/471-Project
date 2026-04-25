@@ -186,11 +186,12 @@ def do_ls(ctrl_sock):
     
     send_msg(ctrl_sock, str(eph_port).encode()) # Step 3: tell the server which port to connect to for the data channel
 
-    ack = recv_msg(ctrl_sock)
+    ack = recv_msg(ctrl_sock).decode().strip()
     
-    if(str(ack)!= "SUCCESS"):
+    if(str(ack)!= "SUCCESS ready for ls"):
         listen_sock.close()
-        raise RuntimeError(ack)
+        print(f"Server Error: {ack}") # Use print so the app doesn't crash        
+        return
 
     listen_sock.settimeout(10)
 
@@ -201,13 +202,12 @@ def do_ls(ctrl_sock):
         print("Message: ",e)
     finally:
         listen_sock.close()
-    recv_exact(data_socket,HEADER_SIZE)
-    file_names = recv_exact(data_socket,len(data_socket))
+    bytes = recv_msg(data_socket).decode()
     data_socket.close()
 
-    print(file_names)
 
-    print(recv_msg(ctrl_sock))
+    print(bytes)
+    print(ack)
 
     
 
@@ -215,15 +215,15 @@ def do_ls(ctrl_sock):
 def do_get(ctrl_sock, filename: str):
     """Download <filename> from the server to the local machine."""
     listen_sock, eph_port = get_ephemeral_port()     # Step 1: open a free port for the incoming data connection
-    send_msg(ctrl_sock, b"get <filename>")     # Step 2: tell the server we want a directory listing
+    send_msg(ctrl_sock, b"get "+filename.encode())     # Step 2: tell the server we want a directory listing
     send_msg(ctrl_sock, str(eph_port).encode()) # Step 3: tell the server which port to connect to for the data channel
 
-    ack = recv_msg(ctrl_sock)
+    ack = recv_msg(ctrl_sock).decode().strip()
     
-    if(str(ack)!= "SUCCESS"):
+    if(str(ack)!= "SUCCESS ready for get"):
         listen_sock.close()
-        raise RuntimeError(ack)
-    
+        print(f"Server Error: {ack}") # Use print so the app doesn't crash        
+        return    
     listen_sock.settimeout(10)
 
     try:
@@ -235,53 +235,37 @@ def do_get(ctrl_sock, filename: str):
         listen_sock.close()
 
     bytes = recv_file_over_socket(data_sock, filename) 
-    listing_bytes = recv_exact(data_sock,len(data_sock))
     data_sock.close()
 
-    print(listing_bytes)
     print(f"{filename} received, {bytes} bytes transferred")
-    # TODO: follow the same 8-step pattern as do_ls above.
-    #
-    # Key differences from ls:
-    #   - Step 2: send "get <filename>" not "ls"
-    #   - Step 6: use recv_file_over_socket(data_sock, filename)
-    #             to write the file to disk
-    #   - Step 8: also print  "<filename> received, N bytes transferred"
+
 
 
 
 def do_put(ctrl_sock, filename: str):
     """Upload <filename> from the local machine to the server."""
 
-    # TODO: follow the same 8-step pattern as do_ls above.
-    #
-    # Key differences from ls/get:
-    #   - Before Step 1: check os.path.isfile(filename).
-    #     If the file doesn't exist locally, print an error and return.
-    #   - Step 2: send "put <filename>"
-    #   - Step 6: use send_file_over_socket(data_sock, filename)
-    #             to send the file
-    #   - Step 8: also print  "<filename> sent, N bytes transferred"
+    listen_sock, eph_port = get_ephemeral_port()     # Step 1: open a free port for the incoming data connection
+
     if(os.path.isfile(filename) == False):
-        raise RuntimeError()
+        listen_sock.close()
+        print(f"Server Error: file does not exist") # Use print so the app doesn't crash        
+        return
     try:
         os.path.isfile(filename) == False
     except ValueError as e:
         print("Type of error: ",type(e))
         print("Message: ",e)
 
-    send_msg(ctrl_sock,b"put <filename>")
-
-
-    
-    listen_sock, eph_port = get_ephemeral_port()     # Step 1: open a free port for the incoming data connection
+    send_msg(ctrl_sock,b"put "+filename.encode())
     send_msg(ctrl_sock, str(eph_port).encode()) # Step 3: tell the server which port to connect to for the data channel
 
-    ack = recv_msg(ctrl_sock)
-    
-    if(str(ack)!= "SUCCESS"):
+    ack_bytes = recv_msg(ctrl_sock)
+    ack = ack_bytes.decode().strip() # Convert bytes to a clean string
+    if((ack)!= "SUCCESS ready for ls"):
         listen_sock.close()
-        raise RuntimeError(ack)
+        print(f"Server Error: {ack}") # Use print so the app doesn't crash        
+        return
     
     listen_sock.settimeout(10)
 
@@ -295,10 +279,8 @@ def do_put(ctrl_sock, filename: str):
     send_file_over_socket(data_sock,filename)
 
     bytes = recv_file_over_socket(data_sock, filename) 
-    listing_bytes = recv_exact(data_sock,len(data_sock))
     data_sock.close()
 
-    print(listing_bytes)
     print(f"{filename} received, {bytes} bytes transferred")
 
 
@@ -329,8 +311,35 @@ def main():
     5. In a finally block: ctrl_sock.close()
        Print "[CLIENT] Disconnected."
     """
+    if(len(sys.argv) < 2):
+        print("Exiting")
+        sys.exit(1)
 
-    pass
+    try:
+        cntrl_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        cntrl_sock.connect((sys.argv[1],int(sys.argv[2])))
+
+    except ValueError as e:
+        print("Type of error: ",type(e))
+        print("Message: ",e)
+    while(1):
+        parts = input("ftp> ").strip().split()
+        if(parts[0].lower() == "ls"):
+            do_ls(cntrl_sock)
+        elif(parts[0].lower() == "get" and len(parts) >=2):
+            do_get(cntrl_sock,parts[1])
+        elif(parts[0].lower() == "put" and len(parts) >=2):
+            do_put(cntrl_sock,parts[1])
+        elif(parts[0].lower() == "quit"):
+            send_msg(cntrl_sock,b"quit")
+            print("Client disconnected")
+            exit()
+        else:
+            print("Message unkown please try again")
+
+
+
+
 
 
 if __name__ == "__main__":
