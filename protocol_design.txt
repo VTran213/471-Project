@@ -5,14 +5,20 @@ This program uses two TCP connections: a control channel for commands and respon
 
 COMMANDS (Client to Server):
 
-ls
-get <filename>
-put <filename>
-quit
+The client sends commands as TWO messages over the control channel:
 
-After each command, the client sends a second message containing the data port number.
+1. Command Message:
+- "ls"
+- "get <filename>"
+- "put <filename>"
+- "quit" (is sent alone and doesn't require a port message)
+
+2. Data Port Message:
+- The ephemeral port number as a string (i.e. "12345")
 
 RESPONSES (Server to Client):
+
+All responses are framed messages:
 
 SUCCESS <message>
 FAILURE <message>
@@ -27,25 +33,34 @@ DATA CHANNEL:
 COMMAND FLOW:
 
 LS:
-Client sends "ls" and port
+Client sends "ls"
+Client sends data port
+
 Server sends SUCCESS
-Server connects and sends directory listing
+Server connects
+Server sends directory listing
 Server sends final SUCCESS
 
 GET:
-Client sends "get <filename>" and port
+Client sends "get <filename>"
+Client sends data port
 Server sends SUCCESS or FAILURE
+
 If SUCCESS:
-Server connects and sends file
+Server connects
+Server sends file
 Server sends final SUCCESS
 
 PUT:
-Client sends "put <filename>" and port
+Client sends "put <filename>"
+Client sends data port
+
 Server sends SUCCESS
-Server connects
+Server connects to data port
 Client sends file
 Server sends final SUCCESS
 
 QUIT:
 Client sends "quit"
+Server sends SUCCESS goodbye
 Server closes connection
